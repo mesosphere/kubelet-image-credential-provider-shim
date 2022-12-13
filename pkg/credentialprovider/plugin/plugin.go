@@ -97,7 +97,7 @@ func (e *ExecPlugin) runPlugin(ctx context.Context, r io.Reader, w io.Writer, ar
 		return fmt.Errorf("%w", ErrNilCredentialProviderResponse)
 	}
 
-	encodedResponse, err := encodeResponse(response)
+	encodedResponse, err := EncodeResponse(response)
 	if err != nil {
 		return err
 	}
@@ -154,7 +154,7 @@ func decodeRequest(data []byte) (*v1beta1.CredentialProviderRequest, error) {
 	return request, nil
 }
 
-func encodeResponse(response *v1beta1.CredentialProviderResponse) ([]byte, error) {
+func EncodeResponse(response *v1beta1.CredentialProviderResponse) ([]byte, error) {
 	mediaType := "application/json"
 	info, ok := runtime.SerializerInfoForMediaType(codecs.SupportedMediaTypes(), mediaType)
 	if !ok {

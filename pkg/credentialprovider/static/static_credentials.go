@@ -47,10 +47,10 @@ func (s staticProvider) GetCredentials(
 		return nil, fmt.Errorf("error reading credentials file: %w", err)
 	}
 
-	return decodeResponse(credentials)
+	return DecodeResponse(credentials)
 }
 
-func decodeResponse(data []byte) (*v1beta1.CredentialProviderResponse, error) {
+func DecodeResponse(data []byte) (*v1beta1.CredentialProviderResponse, error) {
 	obj, gvk, err := codecs.UniversalDecoder(v1beta1.SchemeGroupVersion).Decode(data, nil, nil)
 	if err != nil {
 		return nil, err

@@ -9,6 +9,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"time"
@@ -29,6 +31,8 @@ import (
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/cli-utils/pkg/kstatus/status"
 
+	credentialmanager "github.com/mesosphere/dynamic-credential-provider/pkg/credentialmanager/secret"
+	"github.com/mesosphere/dynamic-credential-provider/test/e2e/cluster"
 	"github.com/mesosphere/dynamic-credential-provider/test/e2e/docker"
 	"github.com/mesosphere/dynamic-credential-provider/test/e2e/env"
 	"github.com/mesosphere/dynamic-credential-provider/test/e2e/helm"
@@ -185,10 +189,10 @@ var _ = Describe("Successful",
 
 		checkCredentialsInContainer := func(ctx context.Context) {
 			staticCredsSecretSecret, err := kindClusterClient.CoreV1().
-				Secrets(metav1.NamespaceSystem).
-				Get(ctx, "staticcredentialproviderauth", metav1.GetOptions{})
+				Secrets(credentialmanager.SecretNamespace).
+				Get(ctx, credentialmanager.SecretName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			jsonBytes, ok := staticCredsSecretSecret.Data["static-image-credentials.json"]
+			jsonBytes, ok := staticCredsSecretSecret.Data[credentialmanager.SecretKeyName]
 			Expect(ok).To(BeTrue())
 			authJSON := string(jsonBytes)
 
@@ -248,36 +252,25 @@ var _ = Describe("Successful",
 			})
 
 		It("config should be updated on node when secret updated", func(ctx SpecContext) {
-			var buf bytes.Buffer
-			Expect(configTemplates.ExecuteTemplate(
-				&buf,
-				"static-image-credentials.json.tmpl",
-				staticImageCredentialsData{
-					DockerHubUsername: "invalid",
-					DockerHubPassword: "credentials",
-				},
-			)).To(Succeed())
-			_, err := kindClusterClient.CoreV1().Secrets(metav1.NamespaceSystem).
-				Apply(
-					ctx,
-					&applycorev1.SecretApplyConfiguration{
-						TypeMetaApplyConfiguration: applymetav1.TypeMetaApplyConfiguration{
-							APIVersion: pointer.String(corev1.SchemeGroupVersion.String()),
-							Kind:       pointer.String("Secret"),
-						},
-						ObjectMetaApplyConfiguration: &applymetav1.ObjectMetaApplyConfiguration{
-							Name: pointer.String("staticcredentialproviderauth"),
-						},
-						StringData: map[string]string{
-							"static-image-credentials.json": buf.String(),
-						},
-					},
-					metav1.ApplyOptions{
-						Force:        true,
-						FieldManager: "dynamic-credential-provider-e2e",
-					},
-				)
+			kubeconfigFile, err := cluster.KubeconfigFromString(kindClusterName, e2eConfig.Kubeconfig)
 			Expect(err).NotTo(HaveOccurred())
+			defer os.RemoveAll(kubeconfigFile)
+			cli := filepath.Join("..", "..", "..", "..",
+				"dist",
+				fmt.Sprintf("credential-manager_%s_%s_v1", runtime.GOOS, runtime.GOARCH),
+				"credential-manager",
+			)
+			cmd := exec.Command(cli,
+				"update", "registry-credentials",
+				"--address", "docker.io",
+				"--username", "invalid",
+				"--password", "credentials",
+			)
+			cmd.Env = os.Environ()
+			cmd.Stdout, cmd.Stderr, cmd.Stdin = os.Stdout, os.Stderr, os.Stdin
+			cmd.Env = append(cmd.Env, fmt.Sprintf("KUBECONFIG=%s", kubeconfigFile))
+			Expect(cmd.Run()).To(Succeed())
+
 			checkCredentialsInContainer(ctx)
 		}, SpecTimeout(2*time.Minute))
 

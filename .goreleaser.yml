@@ -72,6 +72,37 @@ builds:
             - GOARCH={{ .Arch }}
       post:
         - cmd: make SKIP_UPX={{ if index .Env "SKIP_UPX" }}{{ .Env.SKIP_UPX }}{{ else }}{{ .IsSnapshot }}{{ end }} GOOS={{ .Os }} GOARCH={{ .Arch }} UPX_TARGET={{ .Path }} upx
+  - id: credential-manager
+    dir: ./cmd/cli
+    binary: credential-manager
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s
+      - -w
+      - -X 'github.com/mesosphere/dkp-cli-runtime/core/cmd/version.commitDate={{ .CommitDate }}'
+      - -X 'github.com/mesosphere/dkp-cli-runtime/core/cmd/version.gitCommit={{ .FullCommit }}'
+      - -X 'github.com/mesosphere/dkp-cli-runtime/core/cmd/version.gitTreeState={{ .Env.GIT_TREE_STATE }}'
+      - -X 'github.com/mesosphere/dkp-cli-runtime/core/cmd/version.gitVersion=v{{ trimprefix .Version "v" }}'
+      - -X 'github.com/mesosphere/dkp-cli-runtime/core/cmd/version.major={{ .Major }}'
+      - -X 'github.com/mesosphere/dkp-cli-runtime/core/cmd/version.minor={{ .Minor }}'
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    mod_timestamp: '{{ .CommitTimestamp }}'
+    hooks:
+      pre:
+        - cmd: make SKIP_UPX={{ if index .Env "SKIP_UPX" }}{{ .Env.SKIP_UPX }}{{ else }}{{ .IsSnapshot }}{{ end }} go-generate
+          env:
+            - GOOS={{ .Os }}
+            - GOARCH={{ .Arch }}
+      post:
+        - cmd: make SKIP_UPX={{ if index .Env "SKIP_UPX" }}{{ .Env.SKIP_UPX }}{{ else }}{{ .IsSnapshot }}{{ end }} GOOS={{ .Os }} GOARCH={{ .Arch }} UPX_TARGET={{ .Path }} upx
 archives:
   - name_template: '{{ .ProjectName }}_v{{trimprefix .Version "v"}}_{{ .Os }}_{{ .Arch }}'
   # This is a hack documented in https://github.com/goreleaser/goreleaser/blob/df0216d5855e9283d2106fb5acdb0e7b528a56e8/www/docs/customization/archive.md#packaging-only-the-binaries
@@ -86,6 +117,13 @@ archives:
       - none*
     builds:
       - static-credential-provider
+  - name_template: 'credential-manager_v{{trimprefix .Version "v"}}_{{ .Os }}_{{ .Arch }}'
+    # This is a hack documented in https://github.com/goreleaser/goreleaser/blob/df0216d5855e9283d2106fb5acdb0e7b528a56e8/www/docs/customization/archive.md#packaging-only-the-binaries
+    id: credential-manager
+    files:
+      - none*
+    builds:
+      - credential-manager
 dockers:
   - image_templates:
       # Specify the image tag including `-amd64` suffix if the build is not a snapshot build or is not being built on
